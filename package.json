@@ -1,0 +1,18 @@
+{
+  "name": "claude-skills",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Personal AI agent skills + a zero-dependency CLI to install them.",
+  "type": "module",
+  "bin": {
+    "claude-skills": "cli/index.mjs"
+  },
+  "files": ["cli", "plugins", ".claude-plugin"],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "skills": "node cli/index.mjs",
+    "validate": "claude plugin validate . && node cli/index.mjs list"
+  }
+}
