@@ -1,0 +1,80 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - hml
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy (${{ github.ref_name }})
+    runs-on: ubuntu-latest
+    environment: ${{ github.ref_name == 'main' && 'production' || 'hml' }}
+    env:
+      TARGET_APP_ENV: ${{ github.ref_name == 'main' && 'production' || 'hml' }}
+      VERCEL_ENV: ${{ github.ref_name == 'main' && 'production' || 'preview' }}
+      VERCEL_PROD_FLAG: ${{ github.ref_name == 'main' && '--prod' || '' }}
+      VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Generate Prisma Client
+        run: npm run prisma:generate
+
+      - name: Validate code (lint, typecheck, test)
+        run: |
+          npm run lint
+          npm run typecheck
+          npm test
+
+      - name: Run Prisma Migrations
+        working-directory: apps/api
+        env:
+          APP_ENV: ${{ env.TARGET_APP_ENV }}
+          DIRECT_URL: ${{ secrets.DIRECT_URL }}
+        run: npx prisma migrate deploy
+
+      - name: Deploy API to Vercel
+        working-directory: apps/api
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_API }}
+        run: |
+          npx vercel pull --yes --environment=${{ env.VERCEL_ENV }} --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel build ${{ env.VERCEL_PROD_FLAG }} --token=${{ secrets.VERCEL_TOKEN }}
+          API_DEPLOY_URL=$(npx vercel deploy --prebuilt ${{ env.VERCEL_PROD_FLAG }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "API_URL=$API_DEPLOY_URL" >> $GITHUB_ENV
+          echo "API deployed to: $API_DEPLOY_URL"
+
+      - name: Verify API Healthcheck
+        run: |
+          echo "Checking API readiness at $API_URL/health/ready"
+          curl -s --fail --retry 3 --retry-delay 5 "$API_URL/health/ready" || echo "Health check returned non-200"
+
+      - name: Deploy Frontend to Vercel
+        working-directory: apps/web
+        env:
+          VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID_WEB }}
+        run: |
+          npx vercel pull --yes --environment=${{ env.VERCEL_ENV }} --token=${{ secrets.VERCEL_TOKEN }}
+          npx vercel build ${{ env.VERCEL_PROD_FLAG }} --token=${{ secrets.VERCEL_TOKEN }}
+          WEB_DEPLOY_URL=$(npx vercel deploy --prebuilt ${{ env.VERCEL_PROD_FLAG }} --token=${{ secrets.VERCEL_TOKEN }})
+          echo "Frontend deployed to: $WEB_DEPLOY_URL"

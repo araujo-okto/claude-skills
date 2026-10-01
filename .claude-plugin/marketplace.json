@@ -1,0 +1,12 @@
+{
+  "name": "araujo-skills",
+  "owner": { "name": "araujo-okto" },
+  "metadata": { "description": "Personal Claude Code skills, shared across machines." },
+  "plugins": [
+    {
+      "name": "fastify-api-foundation",
+      "source": "./plugins/fastify-api-foundation",
+      "description": "Backend foundation skill: Fastify 5, Prisma 7, Zod 4, strict TS ESM, Biome, Vitest, GitHub Actions + Vercel — with copy-ready, verified templates."
+    }
+  ]
+}
